@@ -120,6 +120,7 @@
       <div class="lbl">Penutup</div>
       <a href="#verifikasi">Verifikasi</a>
       <a href="#troubleshoot">Troubleshooting</a>
+      <a href="#appendix">Referensi Event</a>
       <a href="#faq">FAQ</a>
     </nav>
   </aside>
@@ -270,8 +271,11 @@ s3://seciron-acme-events/json_event/1141/2026/09/2026-09-16-event.json.gz</pre><
         <tr><td>python3 (opsional)</td><td>Untuk normalisasi JSON (Langkah 6). Sudah ada di kebanyakan Linux.</td></tr>
         <tr><td>cron / systemd</td><td>Untuk menjadwalkan pengambilan otomatis (Langkah 8).</td></tr>
       </table>
-      <div class="tip"><b>Tidak harus di server SIEM</b>
-        <p>Anda boleh menjalankan pengambilan di mesin lain (forwarder), lalu meneruskan file ke SIEM. Yang penting hasil akhirnya: file event terbaca oleh SIEM.</p>
+      <div class="danger"><b>Jalankan di server, BUKAN laptop pribadi</b>
+        <p>Semua langkah di bawah (tes akses, <code>s3 sync</code>, ekstrak, normalisasi) dijalankan <b>di server SIEM itu sendiri</b>, atau di sebuah <b>server forwarder</b> yang selalu menyala dan menjadi bagian infrastruktur, bukan di laptop pribadi lalu di-push manual. Alasannya: job harus jalan otomatis 24/7 (cron/systemd), kredensial harus tersimpan di server terkendali, dan file hasilnya harus berada di lokasi yang dibaca SIEM.</p>
+      </div>
+      <div class="tip"><b>Tes akses juga dari server itu</b>
+        <p>Lakukan tes akses S3 (Langkah 4) <b>dari server yang sama</b> yang akan menjalankan job. Tes dari laptop hanya membuktikan kuncinya benar, bukan bahwa server bisa menjangkau AWS, firewall/proxy/aturan egress server sering berbeda dari laptop.</p>
       </div>
     </section>
 
@@ -441,6 +445,20 @@ echo "done: $(wc -l &lt; "$OUT") events total"</pre></div>
       <div class="warn"><b>Ingat sifat T+1</b>
         <p>Menjadwalkan tiap 30 menit tidak membuat data jadi realtime, ia hanya memastikan file harian terambil segera setelah SecIron meng-upload-nya (pagi hari). Sepanjang hari, biasanya tidak ada file baru.</p>
       </div>
+
+      <h3>8b. Rotasi <code>events.jsonl</code> (agar disk tidak penuh)</h3>
+      <p>File <code>events.jsonl</code> bertambah terus setiap hari. Setelah SIEM membacanya, rotasi berkala dengan <b>logrotate</b>. Gunakan <code>copytruncate</code> supaya proses SIEM yang men-<i>tail</i> file tidak terputus.</p>
+      <div class="codeblock"><div class="cbar"><span class="fname">/etc/logrotate.d/ironsky</span><button class="copy">Copy</button></div><pre>/opt/ironsky/out/events.jsonl {
+  daily
+  rotate 7
+  compress
+  missingok
+  notifempty
+  copytruncate
+}</pre></div>
+      <div class="note"><b>Kenapa <code>copytruncate</code>?</b>
+        <p>SIEM agent membaca file ini secara <i>tailing</i> (mengikuti baris baru). <code>copytruncate</code> menyalin isi lalu mengosongkan file asli tanpa mengganti inode-nya, jadi agent tetap mengikuti file yang sama tanpa restart. Data yang sudah masuk aman, SIEM menyimpan histori-nya sendiri di index-nya.</p>
+      </div>
     </section>
 
     <!-- ============ STEP 9 ============ -->
@@ -495,15 +513,59 @@ echo "done: $(wc -l &lt; "$OUT") events total"</pre></div>
       </table>
     </section>
 
+    <!-- ============ APPENDIX ============ -->
+    <section id="appendix">
+      <h2>Referensi: Daftar <code>Security event</code></h2>
+      <p>Jenis event yang bisa muncul di field <code>Security event</code>, beserta <b>usulan</b> level keparahan (skala 0-15 ala Wazuh), kategori, dan padanan MITRE ATT&amp;CK (Enterprise). Pakai ini sebagai titik awal saat menulis rule di <a href="#s9">Langkah 9</a>, lalu sesuaikan level dengan kebijakan risiko organisasi Anda.</p>
+      <table>
+        <tr><th>security_event</th><th>Kategori</th><th>Level</th><th>MITRE</th></tr>
+        <tr><td><code>event_high_risk_injection_framework</code></td><td>injection / hooking (Frida, Xposed)</td><td>13</td><td>T1055</td></tr>
+        <tr><td><code>event_high_risk_injection_android</code></td><td>injection</td><td>13</td><td>T1055</td></tr>
+        <tr><td><code>event_android_injection_attack</code></td><td>injection</td><td>13</td><td>T1055</td></tr>
+        <tr><td><code>event_enchanced_root</code></td><td>rooting (root tersembunyi / Magisk)</td><td>13</td><td>T1548</td></tr>
+        <tr><td><code>event_android_injection_framework</code></td><td>injection</td><td>12</td><td>T1055</td></tr>
+        <tr><td><code>event_risk_root</code></td><td>rooting</td><td>12</td><td>T1548</td></tr>
+        <tr><td><code>event_high_risk_emulator_android</code></td><td>emulator / sandbox</td><td>12</td><td>T1497.001</td></tr>
+        <tr><td><code>event_high_risk_debug_android</code></td><td>debugger</td><td>12</td><td>T1622</td></tr>
+        <tr><td><code>event_high_risk_MITM_android</code></td><td>MITM / network</td><td>12</td><td>T1557</td></tr>
+        <tr><td><code>event_Keylogger</code></td><td>keylogger</td><td>12</td><td>T1056.001</td></tr>
+        <tr><td><code>event_android_keylogger_v3</code></td><td>keylogger</td><td>12</td><td>T1056.001</td></tr>
+        <tr><td><code>event_mimt</code></td><td>MITM</td><td>11</td><td>T1557</td></tr>
+        <tr><td><code>event_mimt2</code></td><td>MITM</td><td>11</td><td>T1557</td></tr>
+        <tr><td><code>event_risk_accessibility</code></td><td>accessibility abuse (overlay / RAT)</td><td>11</td><td>T1056</td></tr>
+        <tr><td><code>event_risk_screen_sharing</code></td><td>screen capture / sharing</td><td>11</td><td>T1113</td></tr>
+        <tr><td><code>event_android_bootloader</code></td><td>rooting (bootloader unlocked)</td><td>10</td><td>T1548</td></tr>
+        <tr><td><code>event_emulator_android</code></td><td>emulator</td><td>10</td><td>T1497.001</td></tr>
+        <tr><td><code>event_risk_mimt</code></td><td>MITM</td><td>10</td><td>T1557</td></tr>
+        <tr><td><code>event_Auto-clickers</code></td><td>input injection (auto-clicker)</td><td>10</td><td>&mdash;</td></tr>
+        <tr><td><code>event_android_screen_reader_capability</code></td><td>screen capture</td><td>10</td><td>T1113</td></tr>
+        <tr><td><code>event_potential_telecom_fraud_android</code></td><td>fraud (telecom)</td><td>10</td><td>&mdash;</td></tr>
+        <tr><td><code>event_risk_debugging_behavior</code></td><td>debugger</td><td>8</td><td>T1622</td></tr>
+        <tr><td><code>event_mock_location</code></td><td>location spoofing / fraud</td><td>8</td><td>&mdash;</td></tr>
+        <tr><td><code>event_unofficial_source</code></td><td>app integrity (sumber tidak resmi)</td><td>7</td><td>T1204.002</td></tr>
+        <tr><td><code>event_android_unofficial_installation_source</code></td><td>app integrity</td><td>7</td><td>T1204.002</td></tr>
+        <tr><td><code>event_side_load_app</code></td><td>app integrity (sideload)</td><td>7</td><td>T1204.002</td></tr>
+        <tr><td><code>event_risk_app</code></td><td>app integrity (app berisiko)</td><td>7</td><td>&mdash;</td></tr>
+        <tr><td><code>event_risk_phone_android</code></td><td>device posture</td><td>7</td><td>&mdash;</td></tr>
+        <tr><td><code>event_risk_calling</code></td><td>fraud (calling)</td><td>7</td><td>&mdash;</td></tr>
+        <tr><td><code>event_Sensitive settings</code></td><td>device posture (setting sensitif)</td><td>6</td><td>&mdash;</td></tr>
+        <tr><td><code>event_android_sensitive_permission_declaration</code></td><td>device posture (izin sensitif)</td><td>6</td><td>&mdash;</td></tr>
+        <tr><td><code>event_developer_mode_id</code></td><td>device posture (developer mode)</td><td>5</td><td>&mdash;</td></tr>
+        <tr><td><code>event_risk_os_standard</code></td><td>device posture</td><td>5</td><td>&mdash;</td></tr>
+        <tr><td><code>event_anti_screenshot</code></td><td>protection event (RASP aktif)</td><td>5</td><td>&mdash;</td></tr>
+        <tr><td><code>event_vpn_detection_android</code></td><td>network (VPN)</td><td>5</td><td>&mdash;</td></tr>
+        <tr><td><code>event_testDeviceblack</code></td><td>misc (test / blacklist device)</td><td>5</td><td>&mdash;</td></tr>
+      </table>
+      <div class="note"><b>Catatan</b>
+        <p>Daftar ini indikatif berdasarkan data contoh, SecIron dapat menambah jenis event baru sewaktu-waktu. Perlakukan event yang belum dikenal sebagai level rendah (mis. 3-5) lalu tinjau berkala. Nilai <code>&mdash;</code> berarti tidak ada padanan MITRE Enterprise yang pas; boleh dikosongkan di rule.</p>
+      </div>
+    </section>
+
     <!-- ============ FAQ ============ -->
     <section id="faq">
       <h2>FAQ</h2>
       <h4>Apakah ini realtime?</h4>
       <p>Tidak. Ini batch harian (T+1). Untuk deteksi seketika, gunakan integrasi realtime (push/API) dari IronSKY.</p>
-      <h4>Berapa lama data tersimpan di S3?</h4>
-      <p>Sesuai kebijakan retensi SecIron. Tanyakan agar Anda tahu seberapa jauh histori bisa ditarik.</p>
-      <h4>Bisakah pakai IAM Role, bukan Access Key?</h4>
-      <p>Jika SIEM Anda berjalan di AWS dan bucket berbagi akun/lewat cross-account role, ya. Untuk lintas-organisasi, biasanya SecIron memberi Access Key statis seperti di panduan ini.</p>
       <h4>SIEM saya bukan Wazuh, apakah tetap bisa?</h4>
       <p>Bisa. Konsepnya identik: <b>pull dari S3 → ekstrak/normalisasi → suapkan file JSON ke SIEM → buat rule</b>. Hanya sintaks konfigurasi ingest &amp; rule yang berbeda per produk.</p>
       <h4>Apakah aman menaruh Access Key di server?</h4>
