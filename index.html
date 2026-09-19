@@ -147,7 +147,7 @@
         <p><b>Amazon S3</b> = layanan penyimpanan file di cloud AWS. Anggap seperti "Google Drive"-nya AWS: file disimpan dalam wadah bernama <b>bucket</b>.</p>
       </div>
       <div class="warn"><b>Penting: ini batch harian, bukan realtime</b>
-        <p>IronSKY menulis <b>1 file per hari per aplikasi</b>, dan file itu di-upload ke S3 <b>keesokan paginya</b> (kira-kira jam 07:00-08:00). Jadi event hari ini baru muncul di SIEM besok pagi. Jika Anda butuh deteksi seketika, gunakan metode integrasi realtime (push/API), bukan panduan ini.</p>
+        <p>IronSKY menulis <b>1 file per hari per aplikasi</b>, dan file itu di-upload ke S3 <b>keesokan paginya</b> (kira-kira jam 07:00-08:00). Jadi event hari ini baru muncul di SIEM besok pagi. Jika Anda butuh deteksi seketika, gunakan <a href="https://fairuzlq.github.io/ironsky-siem-callback-integration/">panduan integrasi realtime via callback SDK</a>, bukan panduan ini.</p>
       </div>
     </section>
 
